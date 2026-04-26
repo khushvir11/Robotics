@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>4-DOF Robotic Arm Simulation — CodeAlpha</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f1117; color: #e0e6f0; font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  header {
+    background: #161b27;
+    border-bottom: 1px solid #2a3045;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header .logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, #4f8ef7, #7c4dff);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: #fff;
+  }
+  header h1 { font-size: 16px; font-weight: 600; color: #e0e6f0; }
+  header p { font-size: 12px; color: #6b7a99; margin-top: 1px; }
+
+  .main { display: flex; height: calc(100vh - 64px); }
+
+  /* ── Canvas panel ── */
+  .canvas-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: #0f1117;
+    position: relative;
+  }
+  canvas {
+    border-radius: 12px;
+    border: 1px solid #2a3045;
+    background: #131824;
+    display: block;
+    max-width: 100%;
+  }
+
+  /* status bar under canvas */
+  .status-bar {
+    margin-top: 12px;
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: #6b7a99;
+  }
+  .status-bar span { display: flex; align-items: center; gap: 5px; }
+  .status-bar strong { color: #b0c0e0; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #444;
+    display: inline-block;
+  }
+  .dot.idle { background: #6b7a99; }
+  .dot.moving { background: #4f8ef7; animation: pulse 0.8s infinite alternate; }
+  .dot.grabbed { background: #f7c94f; }
+  .dot.done { background: #4fcf70; }
+  @keyframes pulse { from { opacity: 0.5; } to { opacity: 1; } }
+
+  /* ── Control panel ── */
+  .controls {
+    width: 280px;
+    background: #161b27;
+    border-left: 1px solid #2a3045;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .ctrl-section {
+    padding: 18px 20px;
+    border-bottom: 1px solid #1e2538;
+  }
+  .ctrl-section h2 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #4f8ef7;
+    margin-bottom: 14px;
+  }
+
+  .joint-row {
+    margin-bottom: 14px;
+  }
+  .joint-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 13px;
+  }
+  .joint-name { color: #b0c0e0; font-weight: 500; }
+  .joint-val {
+    color: #4f8ef7;
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    min-width: 42px;
+    text-align: right;
+  }
+  input[type=range] {
+    width: 100%;
+    accent-color: #4f8ef7;
+    cursor: pointer;
+  }
+  input[type=range]:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .btn {
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid #2a3045;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 8px;
+  }
+  .btn-primary {
+    background: #4f8ef7;
+    color: #fff;
+    border-color: #4f8ef7;
+  }
+  .btn-primary:hover { background: #3a7ae8; }
+  .btn-secondary {
+    background: transparent;
+    color: #b0c0e0;
+  }
+  .btn-secondary:hover { background: #1e2538; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-card {
+    background: #0f1117;
+    border: 1px solid #2a3045;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .stat-card .val {
+    font-size: 18px;
+    font-weight: 700;
+    color: #4f8ef7;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card .lbl {
+    font-size: 10px;
+    color: #6b7a99;
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .grip-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #0f1117;
+    border: 1px solid #2a3045;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-top: 4px;
+  }
+  .grip-toggle:hover { background: #1a2035; }
+  .grip-icon {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .grip-label { font-size: 13px; color: #b0c0e0; font-weight: 500; }
+  .grip-state { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+  .grip-state.open { background: #1e3a2e; color: #4fcf70; }
+  .grip-state.closed { background: #3a2010; color: #f7944f; }
+
+  .info-row { font-size: 12px; color: #6b7a99; line-height: 1.6; }
+  .info-row strong { color: #b0c0e0; }
+
+  .legend { display: flex; flex-direction: column; gap: 6px; }
+  .leg-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8090b0; }
+  .leg-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">R</div>
+  <div>
+    <h1>4-DOF Robotic Arm Simulation</h1>
+    <p>CodeAlpha Robotics &amp; Automation Internship — Task 2 &nbsp;|&nbsp; Khushvir Singh</p>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Canvas -->
+  <div class="canvas-panel">
+    <canvas id="cv" width="720" height="540"></canvas>
+    <div class="status-bar">
+      <span><span class="dot" id="statusDot"></span> Status: <strong id="statusTxt">Idle</strong></span>
+      <span>EE X: <strong id="eeX">0</strong> px</span>
+      <span>EE Y: <strong id="eeY">0</strong> px</span>
+      <span>Reach: <strong id="eeR">0</strong> px</span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+
+    <!-- Joint sliders -->
+    <div class="ctrl-section">
+      <h2>Joint Control (Manual)</h2>
+      <div class="joint-row">
+        <div class="joint-label"><span class="joint-name">J1 — Base</span><span class="joint-val" id="v0">0°</span></div>
+        <input type="range" id="s0" min="-150" max="150" value="0" step="1">
+      </div>
+      <div class="joint-row">
+        <div class="joint-label"><span class="joint-name">J2 — Shoulder</span><span class="joint-val" id="v1">45°</span></div>
+        <input type="range" id="s1" min="-160" max="160" value="45" step="1">
+      </div>
+      <div class="joint-row">
+        <div class="joint-label"><span class="joint-name">J3 — Elbow</span><span class="joint-val" id="v2">-90°</span></div>
+        <input type="range" id="s2" min="-160" max="160" value="-90" step="1">
+      </div>
+      <div class="joint-row">
+        <div class="joint-label"><span class="joint-name">J4 — Wrist</span><span class="joint-val" id="v3">0°</span></div>
+        <input type="range" id="s3" min="-150" max="150" value="0" step="1">
+      </div>
+
+      <div class="grip-toggle" id="gripToggle">
+        <div class="grip-icon">✋</div>
+        <span class="grip-label">Gripper</span>
+        <span class="grip-state open" id="gripState">Open</span>
+      </div>
+    </div>
+
+    <!-- Automation -->
+    <div class="ctrl-section">
+      <h2>Automation</h2>
+      <button class="btn btn-primary" id="btnPlay">▶ Run Pick &amp; Place</button>
+      <button class="btn btn-secondary" id="btnReset">↺ Reset to Home</button>
+    </div>
+
+    <!-- Live stats -->
+    <div class="ctrl-section">
+      <h2>Live Kinematics</h2>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="val" id="sEeX">0</div><div class="lbl">EE X (px)</div></div>
+        <div class="stat-card"><div class="val" id="sEeY">0</div><div class="lbl">EE Y (px)</div></div>
+        <div class="stat-card"><div class="val" id="sReach">0</div><div class="lbl">Reach (px)</div></div>
+        <div class="stat-card"><div class="val" id="sCycles">0</div><div class="lbl">Cycles</div></div>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="ctrl-section">
+      <h2>Legend</h2>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-swatch" style="background:#4f8ef7"></div>Arm links</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:#7c4dff"></div>Joints</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:#f7c94f"></div>End-effector / gripper</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:#4fcf70"></div>Pick zone / object</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:#f7944f"></div>Place zone</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:#2a3045; border:1px dashed #4f8ef7"></div>Workspace boundary</div>
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div class="ctrl-section">
+      <h2>About</h2>
+      <div class="info-row">
+        <strong>DOF:</strong> 4 revolute joints<br>
+        <strong>Max reach:</strong> 335 px<br>
+        <strong>Kinematics:</strong> Forward (FK)<br>
+        <strong>Interpolation:</strong> Ease-in-out quadratic<br>
+        <strong>Keyframes:</strong> 9-step sequence<br>
+        <strong>Renderer:</strong> HTML5 Canvas 2D
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const PI = Math.PI;
+
+const BASE = { x: cv.width / 2, y: cv.height / 2 + 60 };
+const LINK_L = [110, 95, 80, 50];
+const MAX_REACH = LINK_L.reduce((a, b) => a + b, 0);
+
+let joints = [0, 45, -90, 0];
+let gripOpen = true;
+let animating = false;
+let cycles = 0;
+let objectPos = null;
+let objectGrabbed = false;
+let objectPlaced = false;
+let status = 'idle';
+
+const PICK_ZONE = { x: BASE.x - 190, y: BASE.y + 10 };
+const PLACE_ZONE = { x: BASE.x + 190, y: BASE.y + 10 };
+
+const KEYFRAMES = [
+  { j: [0, 45, -90, 0],      grip: true  },
+  { j: [-45, 60, -80, -10],  grip: true  },
+  { j: [-45, 80, -50, -30],  grip: true  },
+  { j: [-45, 80, -50, -30],  grip: false },
+  { j: [-45, 55, -80, -10],  grip: false },
+  { j: [45, 60, -80, 10],    grip: false },
+  { j: [45, 80, -50, 30],    grip: false },
+  { j: [45, 80, -50, 30],    grip: true  },
+  { j: [0, 45, -90, 0],      grip: true  },
+];
+
+const FRAME_COUNTS = [60, 80, 70, 30, 70, 90, 70, 30, 80];
+
+let kfIdx = 0;
+let frame = 0;
+
+function easeInOut(t) {
+  return t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t + 2, 2) / 2;
+}
+function angleLerp(a, b, t) {
+  let d = ((b - a) % 360 + 540) % 360 - 180;
+  return a + d * easeInOut(t);
+}
+
+function fk(j) {
+  let x = BASE.x, y = BASE.y;
+  let angle = j[0] * PI/180 - PI/2;
+  const pts = [{x, y}];
+  for (let i = 0; i < 4; i++) {
+    if (i > 0) angle += j[i] * PI/180;
+    x += LINK_L[i] * Math.cos(angle);
+    y += LINK_L[i] * Math.sin(angle);
+    pts.push({x, y});
+  }
+  return pts;
+}
+
+function drawScene() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+
+  // grid
+  ctx.strokeStyle = '#1a2035';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= cv.width; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cv.height); ctx.stroke();
+  }
+  for (let y = 0; y <= cv.height; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cv.width, y); ctx.stroke();
+  }
+
+  // workspace boundary
+  ctx.beginPath();
+  ctx.arc(BASE.x, BASE.y, MAX_REACH, 0, 2*PI);
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = '#2a3a5a';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // zones
+  const zoneR = 28;
+  // pick zone
+  ctx.beginPath();
+  ctx.arc(PICK_ZONE.x, PICK_ZONE.y, zoneR, 0, 2*PI);
+  ctx.fillStyle = '#0e2a1a';
+  ctx.fill();
+  ctx.strokeStyle = '#4fcf70';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#4fcf70';
+  ctx.font = '11px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.fillText('PICK', PICK_ZONE.x, PICK_ZONE.y - zoneR - 6);
+
+  // place zone
+  ctx.beginPath();
+  ctx.arc(PLACE_ZONE.x, PLACE_ZONE.y, zoneR, 0, 2*PI);
+  ctx.fillStyle = '#2a1a08';
+  ctx.fill();
+  ctx.strokeStyle = '#f7944f';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#f7944f';
+  ctx.fillText('PLACE', PLACE_ZONE.x, PLACE_ZONE.y - zoneR - 6);
+
+  // object (box)
+  if (!objectGrabbed && !objectPlaced) {
+    const op = objectPos || PICK_ZONE;
+    ctx.fillStyle = '#4fcf70';
+    ctx.fillRect(op.x - 10, op.y - 10, 20, 20);
+    ctx.strokeStyle = '#2a9050';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(op.x - 10, op.y - 10, 20, 20);
+  }
+  if (objectPlaced) {
+    ctx.fillStyle = '#f7944f';
+    ctx.fillRect(PLACE_ZONE.x - 10, PLACE_ZONE.y - 10, 20, 20);
+    ctx.strokeStyle = '#b05a20';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(PLACE_ZONE.x - 10, PLACE_ZONE.y - 10, 20, 20);
+  }
+
+  // arm
+  const pts = fk(joints);
+
+  // shadow under arm
+  ctx.strokeStyle = 'rgba(79,142,247,0.06)';
+  ctx.lineWidth = 18;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.stroke();
+
+  // links
+  const colors = ['#4f8ef7', '#5da8f7', '#6dc0f7', '#7ccfef'];
+  for (let i = 0; i < pts.length - 1; i++) {
+    ctx.beginPath();
+    ctx.moveTo(pts[i].x, pts[i].y);
+    ctx.lineTo(pts[i+1].x, pts[i+1].y);
+    ctx.strokeStyle = colors[i];
+    ctx.lineWidth = 10 - i * 1.5;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // link label
+    const mx = (pts[i].x + pts[i+1].x) / 2;
+    const my = (pts[i].y + pts[i+1].y) / 2;
+    const angle = Math.atan2(pts[i+1].y - pts[i].y, pts[i+1].x - pts[i].x);
+    ctx.save();
+    ctx.translate(mx, my);
+    ctx.rotate(angle);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.font = '9px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('L' + (i+1) + ' ' + LINK_L[i] + 'px', 0, -8);
+    ctx.restore();
+  }
+
+  // joints
+  for (let i = 0; i < pts.length - 1; i++) {
+    const r = 9 - i;
+    ctx.beginPath();
+    ctx.arc(pts[i].x, pts[i].y, r, 0, 2*PI);
+    ctx.fillStyle = '#7c4dff';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 8px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('J' + (i+1), pts[i].x, pts[i].y);
+  }
+
+  // base mount
+  ctx.beginPath();
+  ctx.arc(pts[0].x, pts[0].y, 14, 0, 2*PI);
+  ctx.fillStyle = '#2a3045';
+  ctx.fill();
+  ctx.strokeStyle = '#7c4dff';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // gripper at EE
+  const ee = pts[pts.length - 1];
+  const gripAngle = joints.reduce((a, b) => a + b, 0) * PI / 180 - PI/2;
+  const aperture = gripOpen ? 0.35 : 0.08;
+  const jawL = 18;
+
+  // if grabbing object, draw it attached to EE
+  if (objectGrabbed) {
+    ctx.fillStyle = '#4fcf70';
+    ctx.fillRect(ee.x - 10, ee.y - 10, 20, 20);
+    ctx.strokeStyle = '#2a9050';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(ee.x - 10, ee.y - 10, 20, 20);
+  }
+
+  for (let side of [-1, 1]) {
+    ctx.save();
+    ctx.translate(ee.x, ee.y);
+    ctx.rotate(gripAngle + side * aperture);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, jawL);
+    ctx.lineTo(side * 6, jawL + 8);
+    ctx.strokeStyle = '#f7c94f';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // EE dot
+  ctx.beginPath();
+  ctx.arc(ee.x, ee.y, 5, 0, 2*PI);
+  ctx.fillStyle = '#f7c94f';
+  ctx.fill();
+
+  // crosshair at EE
+  ctx.strokeStyle = 'rgba(247,201,79,0.4)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(ee.x - 12, ee.y); ctx.lineTo(ee.x + 12, ee.y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ee.x, ee.y - 12); ctx.lineTo(ee.x, ee.y + 12); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // update stats
+  const dx = Math.round(ee.x - BASE.x);
+  const dy = Math.round(BASE.y - ee.y);
+  const reach = Math.round(Math.sqrt(dx*dx + dy*dy));
+  document.getElementById('eeX').textContent = dx;
+  document.getElementById('eeY').textContent = dy;
+  document.getElementById('eeR').textContent = reach;
+  document.getElementById('sEeX').textContent = dx;
+  document.getElementById('sEeY').textContent = dy;
+  document.getElementById('sReach').textContent = reach;
+  document.getElementById('sCycles').textContent = cycles;
+}
+
+function updateStatus(s) {
+  status = s;
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusTxt');
+  dot.className = 'dot ' + s;
+  txt.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function syncSliders() {
+  for (let i = 0; i < 4; i++) {
+    document.getElementById('s' + i).value = joints[i];
+    document.getElementById('v' + i).textContent = Math.round(joints[i]) + '°';
+  }
+}
+
+function animStep() {
+  if (!animating) return;
+
+  const from = KEYFRAMES[kfIdx];
+  const to   = KEYFRAMES[kfIdx + 1];
+  const total = FRAME_COUNTS[kfIdx];
+  const t = frame / total;
+
+  joints = from.j.map((a, i) => angleLerp(a, to.j[i], t));
+  gripOpen = t < 0.5 ? from.grip : to.grip;
+
+  // object logic
+  if (kfIdx === 3 && t > 0.5) { objectGrabbed = true; objectPos = null; }
+  if (kfIdx === 7 && t > 0.5) { objectGrabbed = false; objectPlaced = true; }
+
+  syncSliders();
+  updateGripUI();
+
+  const moving = kfIdx < KEYFRAMES.length - 2 || frame < total;
+  if (objectGrabbed) updateStatus('grabbed');
+  else if (moving) updateStatus('moving');
+
+  frame++;
+  if (frame > total) {
+    frame = 0;
+    kfIdx++;
+    if (kfIdx >= KEYFRAMES.length - 1) {
+      animating = false;
+      joints = [...KEYFRAMES[KEYFRAMES.length - 1].j];
+      gripOpen = KEYFRAMES[KEYFRAMES.length - 1].grip;
+      syncSliders();
+      updateGripUI();
+      enableSliders(true);
+      document.getElementById('btnPlay').disabled = false;
+      document.getElementById('btnPlay').textContent = '▶ Run Pick & Place';
+      cycles++;
+      document.getElementById('sCycles').textContent = cycles;
+      updateStatus('done');
+      setTimeout(() => { if (status === 'done') updateStatus('idle'); }, 1500);
+      return;
+    }
+  }
+
+  drawScene();
+  requestAnimationFrame(animStep);
+}
+
+function enableSliders(on) {
+  for (let i = 0; i < 4; i++) document.getElementById('s' + i).disabled = !on;
+  document.getElementById('gripToggle').style.opacity = on ? '1' : '0.4';
+  document.getElementById('gripToggle').style.pointerEvents = on ? '' : 'none';
+}
+
+function updateGripUI() {
+  const el = document.getElementById('gripState');
+  el.textContent = gripOpen ? 'Open' : 'Closed';
+  el.className = 'grip-state ' + (gripOpen ? 'open' : 'closed');
+}
+
+// slider listeners
+for (let i = 0; i < 4; i++) {
+  document.getElementById('s' + i).addEventListener('input', e => {
+    joints[i] = parseFloat(e.target.value);
+    document.getElementById('v' + i).textContent = Math.round(joints[i]) + '°';
+    drawScene();
+  });
+}
+
+document.getElementById('gripToggle').addEventListener('click', () => {
+  gripOpen = !gripOpen;
+  updateGripUI();
+  drawScene();
+});
+
+document.getElementById('btnPlay').addEventListener('click', () => {
+  if (animating) return;
+  animating = true;
+  kfIdx = 0;
+  frame = 0;
+  objectGrabbed = false;
+  objectPlaced = false;
+  objectPos = null;
+  joints = [...KEYFRAMES[0].j];
+  gripOpen = KEYFRAMES[0].grip;
+  syncSliders();
+  updateGripUI();
+  enableSliders(false);
+  document.getElementById('btnPlay').disabled = true;
+  document.getElementById('btnPlay').textContent = '⏳ Running...';
+  updateStatus('moving');
+  requestAnimationFrame(animStep);
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  animating = false;
+  joints = [0, 45, -90, 0];
+  gripOpen = true;
+  objectGrabbed = false;
+  objectPlaced = false;
+  objectPos = null;
+  syncSliders();
+  updateGripUI();
+  enableSliders(true);
+  document.getElementById('btnPlay').disabled = false;
+  document.getElementById('btnPlay').textContent = '▶ Run Pick & Place';
+  updateStatus('idle');
+  drawScene();
+});
+
+// init
+syncSliders();
+updateGripUI();
+updateStatus('idle');
+drawScene();
+</script>
+</body>
+</html>
